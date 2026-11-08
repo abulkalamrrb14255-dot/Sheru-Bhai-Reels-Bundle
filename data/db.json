@@ -1,0 +1,14 @@
+{
+  "settings": {
+    "merchantUpiId": "sherubhai@oksbi",
+    "merchantDisplayName": "SHERU BHAI STORE",
+    "whatsappNumber": "+919876543210",
+    "whatsappSupportMessage": "Hi Sheru Bhai Store! I need assistance with the AI Reels Bundle.",
+    "sellingPrice": 197,
+    "originalPrice": 1199
+  },
+  "orders": [],
+  "reels": [],
+  "bonuses": [],
+  "testimonials": []
+}

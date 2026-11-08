@@ -1,0 +1,6 @@
+{
+  "name": "Sheru Bhai Reels Store",
+  "description": "Premium digital product store for AI Sheru Bhai Reels Bundle 2027 Edition with UPI instant checkout and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
