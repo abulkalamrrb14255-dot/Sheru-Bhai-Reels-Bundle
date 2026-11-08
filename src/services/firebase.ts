@@ -3,11 +3,13 @@ import {
   getStorage,
   ref,
   uploadBytesResumable,
+  uploadBytes,
   getDownloadURL,
   FirebaseStorage,
   UploadTask,
 } from 'firebase/storage';
 import { getAuth, Auth, signInAnonymously } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration (Provided by user)
 export const firebaseConfig = {
@@ -24,24 +26,26 @@ export const firebaseConfig = {
 let app: FirebaseApp;
 let storage: FirebaseStorage;
 let auth: Auth;
+let db: Firestore;
 
 try {
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   storage = getStorage(app);
   // Set fast retry timeout so uploads never hang indefinitely (default is 10 minutes)
-  storage.maxUploadRetryTime = 5000;
+  storage.maxUploadRetryTime = 6000;
   auth = getAuth(app);
+  db = getFirestore(app);
 } catch (error) {
   console.warn('Firebase initialization warning:', error);
 }
 
-export { app, storage, auth };
+export { app, storage, auth, db };
 
 /**
  * Ensures a background anonymous authentication session so storage rules with
  * `request.auth != null` succeed without requiring manual password login.
  */
-async function ensureAuthSession(): Promise<void> {
+export async function ensureAuthSession(): Promise<void> {
   if (!auth) return;
   if (!auth.currentUser) {
     try {
@@ -50,6 +54,73 @@ async function ensureAuthSession(): Promise<void> {
       // Ignore if anonymous auth is not enabled in Firebase Console
     }
   }
+}
+
+/**
+ * Compresses an image file in browser canvas before uploading.
+ * Reduces 5MB-10MB mobile phone camera pictures to ~120KB-200KB crisp WebP/JPEG,
+ * ensuring lightning fast uploads and instant loading on WhatsApp and mobile 4G/5G.
+ */
+export function compressImageFile(
+  file: File,
+  maxWidth = 1536,
+  quality = 0.85
+): Promise<File> {
+  return new Promise((resolve) => {
+    // Only compress standard images
+    if (!file.type.startsWith('image/') || file.type === 'image/gif') {
+      return resolve(file);
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.src = e.target?.result as string;
+    };
+
+    img.onload = () => {
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size < file.size) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      } catch (err) {
+        console.warn('Image compression fallback:', err);
+        resolve(file);
+      }
+    };
+
+    img.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
 }
 
 /**
@@ -89,18 +160,16 @@ export async function uploadToFirebaseStorage(
       let hasTransferredBytes = false;
       let isCompleted = false;
 
-      // Watchdog: If after 5 seconds not a single byte has transferred, cancel to prevent 0% freeze
+      // Watchdog: If after 6 seconds not a single byte has transferred, cancel to prevent 0% freeze
       const watchdogTimer = setTimeout(() => {
         if (!hasTransferredBytes && !isCompleted) {
-          console.warn('Firebase Storage upload watchdog triggered: 0 bytes transferred in 5s. Canceling.');
+          console.warn('Firebase Storage upload watchdog triggered: 0 bytes transferred in 6s.');
           try {
             uploadTask.cancel();
-          } catch {
-            // Task cancellation
-          }
-          reject(new Error('Firebase Storage upload timed out at 0% (Storage Rules / CORS blocked)'));
+          } catch {}
+          reject(new Error('Firebase Storage upload timed out at 0% (Storage Rules / CORS check needed)'));
         }
-      }, 5000);
+      }, 6000);
 
       uploadTask.on(
         'state_changed',
@@ -137,4 +206,46 @@ export async function uploadToFirebaseStorage(
       reject(err);
     }
   });
+}
+
+/**
+ * Dedicated upload helpers for each asset type
+ */
+export async function uploadProductImage(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const optimized = await compressImageFile(file, 1536, 0.88);
+  return uploadToFirebaseStorage(optimized, 'product-images', onProgress);
+}
+
+export async function uploadInstagramScreenshot(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const optimized = await compressImageFile(file, 1080, 0.85);
+  return uploadToFirebaseStorage(optimized, 'instagram-demo', onProgress);
+}
+
+export async function uploadDemoVideo(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  return uploadToFirebaseStorage(file, 'demo-videos', onProgress);
+}
+
+export async function uploadDemoThumbnail(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const optimized = await compressImageFile(file, 720, 0.85);
+  return uploadToFirebaseStorage(optimized, 'demo-thumbnails', onProgress);
+}
+
+export async function uploadPaymentScreenshot(
+  file: File,
+  onProgress?: (pct: number) => void
+): Promise<string> {
+  const optimized = await compressImageFile(file, 1280, 0.82);
+  return uploadToFirebaseStorage(optimized, 'payment-screenshots', onProgress);
 }

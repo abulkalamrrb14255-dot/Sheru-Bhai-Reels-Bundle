@@ -202,6 +202,8 @@ export const DEFAULT_ORDERS: Order[] = [
   },
 ];
 
+import { firestoreSync } from './firestoreSync';
+
 // Persistent Service Layer
 class StoreService {
   private settings: StoreSettings;
@@ -209,6 +211,7 @@ class StoreService {
   private reels: DemoReel[];
   private bonuses: BonusItem[];
   private testimonials: Testimonial[];
+  private listeners: Array<() => void> = [];
 
   constructor() {
     this.settings = this.loadSettings();
@@ -217,8 +220,59 @@ class StoreService {
     this.bonuses = this.loadBonuses();
     this.testimonials = this.loadTestimonials();
 
+    // Start real-time Firestore listeners for instant cross-device updates
+    this.initCloudSync();
+
     // Background sync with server if available
     this.syncFromServer();
+  }
+
+  // Subscribe UI components to live store updates
+  public subscribe(callback: () => void): () => void {
+    this.listeners.push(callback);
+    return () => {
+      this.listeners = this.listeners.filter((cb) => cb !== callback);
+    };
+  }
+
+  private notify() {
+    this.listeners.forEach((cb) => {
+      try {
+        cb();
+      } catch (err) {
+        console.warn('Listener error in storeService:', err);
+      }
+    });
+  }
+
+  private initCloudSync() {
+    try {
+      firestoreSync.initListeners();
+
+      // Listen to cloud settings updates
+      firestoreSync.subscribeSettings((cloudSettings) => {
+        this.settings = { ...this.settings, ...cloudSettings };
+        this.notify();
+      });
+
+      // Listen to cloud reels updates
+      firestoreSync.subscribeReels((cloudReels) => {
+        if (Array.isArray(cloudReels) && cloudReels.length > 0) {
+          this.reels = [...cloudReels];
+          this.notify();
+        }
+      });
+
+      // Listen to cloud orders updates
+      firestoreSync.subscribeOrders((cloudOrders) => {
+        if (Array.isArray(cloudOrders) && cloudOrders.length > 0) {
+          this.orders = [...cloudOrders];
+          this.notify();
+        }
+      });
+    } catch (e) {
+      console.warn('Could not initialize cloud sync listeners:', e);
+    }
   }
 
   // --- SETTINGS ---
@@ -242,7 +296,11 @@ class StoreService {
     this.settings = { ...this.settings, ...newSettings };
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
-      // Sync to backend API asynchronously
+      // Save directly to shared Firestore cloud database
+      firestoreSync.saveSettingsToCloud(newSettings);
+      this.notify();
+
+      // Sync to backend API asynchronously if node server runs
       fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -316,6 +374,10 @@ class StoreService {
     this.orders = [newOrder, ...this.orders];
     this.persistOrders();
 
+    // Save directly to shared Firestore database
+    firestoreSync.saveOrderToCloud(newOrder);
+    this.notify();
+
     // Async sync to server
     fetch('/api/orders', {
       method: 'POST',
@@ -345,6 +407,8 @@ class StoreService {
     };
 
     this.persistOrders();
+    firestoreSync.saveOrderToCloud(this.orders[index]);
+    this.notify();
     return { success: true };
   }
 
@@ -374,6 +438,9 @@ class StoreService {
     }
 
     this.persistOrders();
+    // Save to shared Firestore database
+    firestoreSync.saveOrderToCloud(this.orders[index]);
+    this.notify();
 
     // Async sync to server
     fetch(`/api/orders/${orderId}/status`, {
@@ -423,6 +490,22 @@ class StoreService {
   public saveReels(reels: DemoReel[]) {
     this.reels = [...reels];
     localStorage.setItem(REELS_KEY, JSON.stringify(this.reels));
+    // Save all reels to shared Firestore cloud database
+    for (const reel of reels) {
+      firestoreSync.saveReelToCloud(reel);
+    }
+    this.notify();
+  }
+
+  public deleteReel(id: string) {
+    this.reels = this.reels.filter((r) => r.id !== id);
+    localStorage.setItem(REELS_KEY, JSON.stringify(this.reels));
+    firestoreSync.deleteReelFromCloud(id);
+    this.notify();
+  }
+
+  public async syncCurrentDataToCloud() {
+    return firestoreSync.syncLocalDataToCloud(this.settings, this.reels);
   }
 
   // --- BONUSES ---

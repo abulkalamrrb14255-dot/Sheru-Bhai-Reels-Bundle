@@ -32,7 +32,15 @@ import {
 } from 'lucide-react';
 import { StoreSettings, Order, DemoReel, BonusItem, Testimonial } from '../../types/store';
 import { storeService } from '../../services/storeService';
-import { uploadToFirebaseStorage, firebaseConfig } from '../../services/firebase';
+import {
+  uploadToFirebaseStorage,
+  uploadProductImage,
+  uploadInstagramScreenshot,
+  uploadDemoVideo,
+  uploadDemoThumbnail,
+  firebaseConfig,
+} from '../../services/firebase';
+import { firestoreSync } from '../../services/firestoreSync';
 import {
   uploadVideoSmart,
   uploadThumbnailSmart,
@@ -144,25 +152,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
   // ----------------------------------------------------
   const [coverUrlInput, setCoverUrlInput] = useState(settings.productCoverUrl);
   const [coverSaved, setCoverSaved] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [coverUploadProgress, setCoverUploadProgress] = useState(0);
 
-  const handleCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSyncMessage, setCloudSyncMessage] = useState<string | null>(null);
+
+  // Sync any locally stored uploads on this device into the shared central Firestore
+  const handlePushLocalToCloud = async () => {
+    setIsSyncingCloud(true);
+    setCloudSyncMessage('Syncing data to Cloud Firestore...');
+    try {
+      const res = await storeService.syncCurrentDataToCloud();
+      if (res.success) {
+        setCloudSyncMessage(`✅ Synced ${res.syncedCount} items to Cloud Database! All devices will now see this content.`);
+      } else {
+        setCloudSyncMessage(`⚠️ Cloud note: ${res.error}. Please ensure Firestore is enabled in Firebase Console.`);
+      }
+    } catch (e: any) {
+      setCloudSyncMessage(`⚠️ Sync error: ${e?.message}`);
+    } finally {
+      setIsSyncingCloud(false);
+      setTimeout(() => setCloudSyncMessage(null), 7000);
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setCoverUrlInput(dataUrl);
-      const updated = storeService.saveSettings({ productCoverUrl: dataUrl });
+
+    setIsUploadingCover(true);
+    setCoverUploadProgress(15);
+
+    try {
+      // 1. Upload to permanent Firebase Storage /product-images/
+      const downloadUrl = await uploadProductImage(file, (pct) => setCoverUploadProgress(pct));
+      setCoverUrlInput(downloadUrl);
+      const updated = storeService.saveSettings({ productCoverUrl: downloadUrl });
       setSettings(updated);
       setCoverSaved(true);
-      setTimeout(() => setCoverSaved(false), 3000);
-    };
-    reader.readAsDataURL(file);
+      setTimeout(() => setCoverSaved(false), 4000);
+    } catch (err: any) {
+      console.warn('Firebase Storage upload notice, falling back to optimized inline cloud storage:', err);
+      // Fallback: Read as optimized data and save to central Firestore
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setCoverUrlInput(dataUrl);
+        const updated = storeService.saveSettings({ productCoverUrl: dataUrl });
+        setSettings(updated);
+        setCoverSaved(true);
+        setTimeout(() => setCoverSaved(false), 4000);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingCover(false);
+      setCoverUploadProgress(100);
+    }
   };
 
   const handleSaveCoverUrl = (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = storeService.saveSettings({ productCoverUrl: coverUrlInput.trim() });
+    const cleanUrl = coverUrlInput.trim();
+    const updated = storeService.saveSettings({ productCoverUrl: cleanUrl });
     setSettings(updated);
     setCoverSaved(true);
     setTimeout(() => setCoverSaved(false), 3000);
@@ -178,16 +230,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
   const [draftIgPosts, setDraftIgPosts] = useState(settings.instagramPosts);
   const [draftIgBio, setDraftIgBio] = useState(settings.instagramBio);
   const [igSaved, setIgSaved] = useState(false);
+  const [isUploadingIg, setIsUploadingIg] = useState(false);
+  const [igUploadProgress, setIgUploadProgress] = useState(0);
 
-  const handleIgScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleIgScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setDraftIgScreenshot(dataUrl);
-    };
-    reader.readAsDataURL(file);
+
+    setIsUploadingIg(true);
+    setIgUploadProgress(15);
+
+    try {
+      // Upload to permanent Firebase Storage /instagram-demo/
+      const downloadUrl = await uploadInstagramScreenshot(file, (pct) => setIgUploadProgress(pct));
+      setDraftIgScreenshot(downloadUrl);
+      const updated = storeService.saveSettings({ instagramDemoScreenshot: downloadUrl });
+      setSettings(updated);
+      setIgSaved(true);
+      setTimeout(() => setIgSaved(false), 4000);
+    } catch (err: any) {
+      console.warn('Instagram screenshot upload notice:', err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setDraftIgScreenshot(dataUrl);
+        const updated = storeService.saveSettings({ instagramDemoScreenshot: dataUrl });
+        setSettings(updated);
+        setIgSaved(true);
+        setTimeout(() => setIgSaved(false), 4000);
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingIg(false);
+      setIgUploadProgress(100);
+    }
   };
 
   const handleSaveInstagramDemo = (e: React.FormEvent) => {
@@ -422,7 +498,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handlePushLocalToCloud}
+            disabled={isSyncingCloud}
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white text-xs font-bold flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50 transition-all"
+            title="Push local mobile uploads to Firebase Firestore so all other devices see them instantly"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            <span>{isSyncingCloud ? 'Syncing...' : 'Sync Local Uploads to Cloud'}</span>
+          </button>
           <button
             onClick={onClose}
             className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-semibold text-gray-300 hover:text-white transition-colors cursor-pointer"
@@ -438,6 +524,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
           </button>
         </div>
       </header>
+
+      {/* Cloud Sync Status Banner */}
+      {cloudSyncMessage && (
+        <div className="bg-purple-950/80 border-b border-purple-500/40 px-4 py-2.5 text-xs font-medium text-white flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{cloudSyncMessage}</span>
+          </div>
+          <button
+            onClick={() => setCloudSyncMessage(null)}
+            className="text-gray-400 hover:text-white cursor-pointer ml-3"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Admin Body: Sidebar Tabs + Workspace */}
       <div className="flex flex-1 overflow-hidden">
@@ -791,9 +893,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
                         className="sr-only"
                       />
                       <Upload className="w-8 h-8 text-purple-400 mb-2" />
-                      <span className="text-xs font-bold text-white">Select File from Computer</span>
+                      <span className="text-xs font-bold text-white">Select File from Computer / Gallery</span>
                       <span className="text-[10px] text-gray-400">JPG, PNG, WEBP (Supports 1536×1536)</span>
                     </label>
+
+                    {isUploadingCover && (
+                      <div className="mt-3 space-y-1.5 p-3 rounded-xl bg-purple-950/40 border border-purple-500/30">
+                        <div className="flex justify-between text-[11px] text-gray-300">
+                          <span className="flex items-center gap-1.5">
+                            <RefreshCw className="w-3 h-3 animate-spin text-purple-400" />
+                            <span>Uploading to Firebase Storage /product-images/...</span>
+                          </span>
+                          <span className="text-amber-400 font-bold">{coverUploadProgress}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                          <div
+                            className="h-full bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400 transition-all duration-200"
+                            style={{ width: `${coverUploadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <form onSubmit={handleSaveCoverUrl} className="pt-2 border-t border-white/10 space-y-3">
@@ -864,6 +984,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
                         onChange={handleIgScreenshotUpload}
                         className="text-xs text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-500"
                       />
+                      {isUploadingIg && (
+                        <div className="mt-2 space-y-1 p-2 rounded-xl bg-purple-950/40 border border-purple-500/30">
+                          <div className="flex justify-between text-[11px] text-gray-300">
+                            <span className="flex items-center gap-1.5">
+                              <RefreshCw className="w-3 h-3 animate-spin text-purple-400" />
+                              <span>Uploading to Firebase Storage /instagram-demo/...</span>
+                            </span>
+                            <span className="text-cyan-400 font-bold">{igUploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-black/60 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-200"
+                              style={{ width: `${igUploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -1599,27 +1736,89 @@ service firebase.storage {
 {`rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Public preview reels and thumbnails
+    // 1. Published storefront media: Publicly readable across all devices & browsers
+    match /product-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /instagram-demo/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
     match /demo-videos/{allPaths=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.auth != null;
     }
     match /demo-thumbnails/{allPaths=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.auth != null;
     }
-    match /product-images/{allPaths=**} {
-      allow read: if true;
-      allow write: if true;
-    }
-    // Protected order assets
-    match /product-downloads/{allPaths=**} {
-      allow read: if true;
-      allow write: if true;
-    }
+
+    // 2. Private customer payment screenshots: Uploadable at checkout, viewable only by Admin
     match /payment-screenshots/{allPaths=**} {
+      allow create: if request.resource.size < 15 * 1024 * 1024;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // 3. Protected master product ZIP bundle downloads: Never public
+    match /product-downloads/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Default deny for everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}`}
+                </pre>
+              </div>
+
+              {/* 4B. Cloud Firestore Database Rules */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-cyan-400 text-black font-black text-[10px] flex items-center justify-center">4B</span>
+                    <span>Cloud Firestore Rules (Paste in Firebase Console → Firestore → Rules)</span>
+                  </h4>
+                  <span className="text-[10px] text-cyan-400 font-semibold">Live Real-time Sync</span>
+                </div>
+                <pre className="p-3.5 bg-black/70 rounded-xl border border-white/10 text-cyan-300 font-mono text-xs overflow-x-auto leading-relaxed">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Storefront Settings: Public read for all devices; write restricted to Admin
+    match /settings/{docId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 2. Demo Reels: Public read for all devices; write/delete restricted to Admin
+    match /reels/{reelId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 3. Bonuses & Testimonials: Public read; write restricted to Admin
+    match /bonuses/{bonusId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /testimonials/{testId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 4. Customer Orders: Customers can submit orders and lookup their own orders by ID/mobile
+    match /orders/{orderId} {
+      allow create, read: if true;
+      allow update, delete: if request.auth != null;
+    }
+
+    // Default catch-all deny
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }`}

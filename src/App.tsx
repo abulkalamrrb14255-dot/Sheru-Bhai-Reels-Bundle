@@ -34,6 +34,35 @@ export default function App() {
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(() => storeService.isAdminAuthenticated());
 
+  // Subscribe to real-time central database updates across all devices
+  useEffect(() => {
+    const unsubscribe = storeService.subscribe(() => {
+      refreshStoreData();
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync dynamic Open Graph meta tags for WhatsApp & social previews
+  useEffect(() => {
+    if (settings.productCoverUrl) {
+      let ogImage = document.querySelector('meta[property="og:image"]');
+      if (!ogImage) {
+        ogImage = document.createElement('meta');
+        ogImage.setAttribute('property', 'og:image');
+        document.head.appendChild(ogImage);
+      }
+      ogImage.setAttribute('content', settings.productCoverUrl);
+
+      let twitterImage = document.querySelector('meta[name="twitter:image"]');
+      if (!twitterImage) {
+        twitterImage = document.createElement('meta');
+        twitterImage.setAttribute('name', 'twitter:image');
+        document.head.appendChild(twitterImage);
+      }
+      twitterImage.setAttribute('content', settings.productCoverUrl);
+    }
+  }, [settings.productCoverUrl]);
+
   // Check URL params for direct /admin or ?admin=true
   useEffect(() => {
     if (window.location.pathname.includes('/admin') || window.location.search.includes('admin=true')) {

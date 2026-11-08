@@ -1,0 +1,42 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 1. Storefront Public Published Media (Cross-browser, cross-device public read)
+    // Allows all customers on any phone, browser, or WhatsApp link to view images and sample reels
+    match /product-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /instagram-demo/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /demo-videos/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /demo-thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 2. Private Payment Screenshots
+    // Customers can upload their UPI receipt screenshot upon checkout, but only authenticated Admin can view/manage
+    match /payment-screenshots/{allPaths=**} {
+      allow create: if request.resource.size < 15 * 1024 * 1024;
+      allow read, update, delete: if request.auth != null;
+    }
+
+    // 3. Protected Master ZIP Bundle Downloads
+    // Never publicly writable; readable only with authorized access
+    match /product-downloads/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // Default deny for everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock, KeyRound, ShieldAlert, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { storeService } from '../../services/storeService';
+import { ensureAuthSession } from '../../services/firebase';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
     setLoading(false);
 
     if (success) {
+      ensureAuthSession().catch(() => {});
       onLoginSuccess();
       onClose();
     } else {

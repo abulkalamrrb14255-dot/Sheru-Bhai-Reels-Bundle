@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Global store settings, pricing, branding, and countdown configuration",
+      "type": "object",
+      "properties": {
+        "merchantUpiId": { "type": "string" },
+        "merchantDisplayName": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "productTitle": { "type": "string" },
+        "sellingPrice": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "productCoverUrl": { "type": "string" },
+        "instagramDemoScreenshot": { "type": "string" },
+        "flashSaleDeadline": { "type": "string" }
+      }
+    },
+    "DemoReel": {
+      "title": "DemoReel",
+      "description": "Published vertical 9:16 demo reel preview",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "views": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "isPublished": { "type": "boolean" },
+        "orderIndex": { "type": "number" }
+      },
+      "required": ["id", "title", "thumbnailUrl"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer digital purchase order and payment verification record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerName": { "type": "string" },
+        "email": { "type": "string" },
+        "mobile": { "type": "string" },
+        "amount": { "type": "number" },
+        "utrNumber": { "type": "string" },
+        "screenshotUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerName", "email", "mobile", "amount", "utrNumber"]
+    }
+  },
+  "firestore": {
+    "/settings/general": {
+      "schema": "StoreSettings",
+      "description": "Storefront master settings document"
+    },
+    "/reels/{reelId}": {
+      "schema": "DemoReel",
+      "description": "Published demo reels collection"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer purchase orders collection"
+    }
+  }
+}
