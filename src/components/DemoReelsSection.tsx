@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize2, X, Eye, Flame } from 'lucide-react';
 import { DemoReel } from '../types/store';
+import { resolveMediaUrl } from '../services/mediaStorage';
 
 interface DemoReelsSectionProps {
   reels: DemoReel[];
@@ -12,6 +13,23 @@ export const DemoReelsSection: React.FC<DemoReelsSectionProps> = ({ reels, onBuy
   const [activeModalReel, setActiveModalReel] = useState<DemoReel | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [resolvedVideoUrl, setResolvedVideoUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!activeModalReel?.videoUrl) {
+      setResolvedVideoUrl('');
+      return;
+    }
+    let isCurrent = true;
+    resolveMediaUrl(activeModalReel.videoUrl).then((url) => {
+      if (isCurrent) {
+        setResolvedVideoUrl(url);
+      }
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [activeModalReel]);
 
   return (
     <section id="demo-reels" className="py-16 sm:py-24 bg-gradient-to-b from-transparent via-[#0b0b14] to-transparent relative">
@@ -124,7 +142,7 @@ export const DemoReelsSection: React.FC<DemoReelsSectionProps> = ({ reels, onBuy
             <div className="relative aspect-[9/16] w-full bg-black flex items-center justify-center overflow-hidden">
               {activeModalReel.videoUrl ? (
                 <video
-                  src={activeModalReel.videoUrl}
+                  src={resolvedVideoUrl || activeModalReel.videoUrl}
                   poster={activeModalReel.thumbnailUrl}
                   controls={false}
                   autoPlay={isPlaying}
