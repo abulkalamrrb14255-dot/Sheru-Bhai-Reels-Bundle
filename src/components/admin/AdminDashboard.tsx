@@ -1528,8 +1528,8 @@ service firebase.storage {
                     Supports Email/Password or master admin passcode:
                   </p>
                   <div className="p-2.5 bg-black/50 rounded-xl border border-white/10 text-xs">
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Configured Admin Passcode:</span>
-                    <span className="font-mono font-bold text-amber-300">Rayyan@1234</span>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Admin Authentication:</span>
+                    <span className="font-mono font-bold text-emerald-400">•••••••••• (Configured Securely)</span>
                   </div>
                 </div>
               </div>

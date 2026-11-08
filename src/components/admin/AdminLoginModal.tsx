@@ -32,7 +32,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onLoginSuccess();
       onClose();
     } else {
-      setError('Invalid admin password. Default credentials: Rayyan@1234');
+      setError('Invalid admin passcode. Access denied.');
     }
   };
 
@@ -85,9 +85,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[11px] text-gray-400 mt-1.5">
-              Default passcode: <code className="text-amber-300 font-mono">Rayyan@1234</code>
-            </p>
           </div>
 
           <button

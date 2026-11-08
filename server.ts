@@ -166,7 +166,7 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   ) {
     return res.json({ success: true, token: 'sheru_admin_token_' + Date.now() });
   }
-  return res.status(401).json({ error: 'Invalid password. Try Rayyan@1234' });
+  return res.status(401).json({ error: 'Invalid admin passcode.' });
 });
 
 // Start Server with Vite Middleware
