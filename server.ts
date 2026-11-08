@@ -158,10 +158,15 @@ app.get('/api/orders/lookup/:query', (req: Request, res: Response) => {
 // Admin Auth API
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { password } = req.body;
-  if (password === 'sherubhai@admin2027' || password === 'admin123' || password === 'sherubhai2027') {
+  if (
+    password === 'Rayyan@1234' ||
+    password === 'sherubhai@admin2027' ||
+    password === 'admin123' ||
+    password === 'sherubhai2027'
+  ) {
     return res.json({ success: true, token: 'sheru_admin_token_' + Date.now() });
   }
-  return res.status(401).json({ error: 'Invalid password. Try sherubhai@admin2027' });
+  return res.status(401).json({ error: 'Invalid password. Try Rayyan@1234' });
 });
 
 // Start Server with Vite Middleware

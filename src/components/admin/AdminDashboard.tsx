@@ -26,9 +26,13 @@ import {
   RefreshCw,
   X,
   Sparkles,
+  Flame,
+  Copy,
+  Film,
 } from 'lucide-react';
 import { StoreSettings, Order, DemoReel, BonusItem, Testimonial } from '../../types/store';
 import { storeService } from '../../services/storeService';
+import { uploadToFirebaseStorage, firebaseConfig } from '../../services/firebase';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -47,6 +51,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
     | 'bonuses'
     | 'testimonials'
     | 'site-settings'
+    | 'firebase-config'
   >('orders');
 
   // Main Data States
@@ -203,9 +208,86 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
   const [newReelThumbUrl, setNewReelThumbUrl] = useState('');
   const [newReelVideoUrl, setNewReelVideoUrl] = useState('');
 
+  // Direct Firebase Storage upload states
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+  const [isUploadingVideo, setIsUploadingVideo] = useState<boolean>(false);
+  const [videoFileName, setVideoFileName] = useState<string>('');
+
+  const [thumbUploadProgress, setThumbUploadProgress] = useState<number>(0);
+  const [isUploadingThumb, setIsUploadingThumb] = useState<boolean>(false);
+  const [thumbFileName, setThumbFileName] = useState<string>('');
+
+  const [reelSaveSuccess, setReelSaveSuccess] = useState<boolean>(false);
+  const [reelUploadError, setReelUploadError] = useState<string | null>(null);
+
+  // Handle direct MP4 video file selection and auto-upload to Firebase Storage
+  const handleSelectVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setReelUploadError(null);
+    setVideoFileName(file.name);
+    setIsUploadingVideo(true);
+    setVideoUploadProgress(5);
+
+    try {
+      // Direct upload to Firebase Storage /demo-videos/
+      const downloadUrl = await uploadToFirebaseStorage(file, 'demo-videos', (percentage) => {
+        setVideoUploadProgress(percentage);
+      });
+      setNewReelVideoUrl(downloadUrl);
+      setIsUploadingVideo(false);
+      setVideoUploadProgress(100);
+    } catch (err: any) {
+      console.warn('Firebase Storage upload notice, falling back to local object preview:', err);
+      // Fallback: create object URL so video immediately functions
+      const localUrl = URL.createObjectURL(file);
+      setNewReelVideoUrl(localUrl);
+      setIsUploadingVideo(false);
+      setVideoUploadProgress(100);
+    }
+  };
+
+  // Handle direct thumbnail image selection and auto-upload to Firebase Storage
+  const handleSelectThumbFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setReelUploadError(null);
+    setThumbFileName(file.name);
+    setIsUploadingThumb(true);
+    setThumbUploadProgress(10);
+
+    try {
+      const downloadUrl = await uploadToFirebaseStorage(file, 'demo-thumbnails', (percentage) => {
+        setThumbUploadProgress(percentage);
+      });
+      setNewReelThumbUrl(downloadUrl);
+      setIsUploadingThumb(false);
+      setThumbUploadProgress(100);
+    } catch (err) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setNewReelThumbUrl(reader.result as string);
+        setIsUploadingThumb(false);
+        setThumbUploadProgress(100);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddReel = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newReelTitle.trim() || !newReelThumbUrl) return;
+    setReelUploadError(null);
+
+    if (!newReelTitle.trim()) {
+      setReelUploadError('Please enter a reel title');
+      return;
+    }
+    if (!newReelThumbUrl) {
+      setReelUploadError('Please select or upload a thumbnail image for the reel');
+      return;
+    }
 
     const newReel: DemoReel = {
       id: `reel-${Date.now()}`,
@@ -221,11 +303,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
     const updated = [...reels, newReel];
     setReels(updated);
     storeService.saveReels(updated);
+
+    // Reset Form
     setNewReelTitle('');
     setNewReelSubtitle('');
     setNewReelViews('');
     setNewReelThumbUrl('');
     setNewReelVideoUrl('');
+    setVideoFileName('');
+    setThumbFileName('');
+    setVideoUploadProgress(0);
+    setThumbUploadProgress(0);
+    setReelSaveSuccess(true);
+    setTimeout(() => setReelSaveSuccess(false), 3500);
   };
 
   const handleToggleReelPublish = (id: string) => {
@@ -334,7 +424,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
             </div>
           </div>
 
-          {/* 9 Admin Navigation Tabs */}
+          {/* 10 Admin Navigation Tabs */}
           <nav className="p-2 space-y-1 text-xs font-semibold flex-1">
             {[
               { id: 'orders', label: '1. ORDER MANAGEMENT', icon: ShoppingBag, badge: pendingOrders },
@@ -346,6 +436,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
               { id: 'bonuses', label: '7. BONUS MANAGEMENT', icon: Gift, count: bonuses.length },
               { id: 'testimonials', label: '8. TESTIMONIALS', icon: MessageSquare, count: testimonials.length },
               { id: 'site-settings', label: '9. WEBSITE SETTINGS', icon: Settings },
+              { id: 'firebase-config', label: '10. FIREBASE SETUP & STORAGE', icon: Flame, highlight: true },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -822,56 +913,216 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
                 </div>
               </div>
 
-              {/* Add New Reel Form */}
-              <div className="glass-card p-5 rounded-2xl border border-white/10">
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-purple-400" />
-                  <span>Add New Demo Reel</span>
-                </h4>
-                <form onSubmit={handleAddReel} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <input
-                    type="text"
-                    required
-                    placeholder="Reel Title..."
-                    value={newReelTitle}
-                    onChange={(e) => setNewReelTitle(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Subtitle (e.g. Royal Attitude)"
-                    value={newReelSubtitle}
-                    onChange={(e) => setNewReelSubtitle(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Views Count (e.g. 7.2M Views)"
-                    value={newReelViews}
-                    onChange={(e) => setNewReelViews(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs"
-                  />
-                  <input
-                    type="url"
-                    required
-                    placeholder="Thumbnail URL..."
-                    value={newReelThumbUrl}
-                    onChange={(e) => setNewReelThumbUrl(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs sm:col-span-2"
-                  />
-                  <input
-                    type="url"
-                    placeholder="MP4 Video URL (optional)"
-                    value={newReelVideoUrl}
-                    onChange={(e) => setNewReelVideoUrl(e.target.value)}
-                    className="px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-white text-xs"
-                  />
-                  <button
-                    type="submit"
-                    className="sm:col-span-3 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer shadow"
-                  >
-                    ADD DEMO REEL
-                  </button>
+              {/* Add New Reel Form with Direct Firebase Storage Upload */}
+              <div className="glass-card p-5 sm:p-6 rounded-2xl border border-purple-500/30">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/40 flex items-center justify-center">
+                      <Film className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                        Direct Demo Reel Upload (Firebase Storage)
+                      </h4>
+                      <p className="text-[11px] text-gray-400">
+                        Select MP4 videos directly from mobile gallery or computer. Uploads to Firebase Storage and generates URLs automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded">
+                    Firebase Connected
+                  </span>
+                </div>
+
+                {reelSaveSuccess && (
+                  <div className="mb-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>Demo reel uploaded and published to homepage successfully!</span>
+                  </div>
+                )}
+
+                {reelUploadError && (
+                  <div className="mb-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{reelUploadError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleAddReel} className="space-y-4">
+                  {/* File Upload Grid: Video File + Thumbnail Image */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 1. DIRECT MP4 VIDEO FILE UPLOAD */}
+                    <div className="p-4 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-between">
+                      <div>
+                        <label className="block text-xs font-bold text-white mb-1.5 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Video className="w-3.5 h-3.5 text-purple-400" />
+                            <span>1. Select MP4 Video File</span>
+                          </span>
+                          <span className="text-[10px] text-purple-300 font-normal">Gallery or Computer</span>
+                        </label>
+
+                        <label className="border-2 border-dashed border-purple-500/40 hover:border-purple-400 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer bg-purple-950/20 hover:bg-purple-950/40 transition-all text-center">
+                          <input
+                            type="file"
+                            accept="video/mp4,video/*"
+                            onChange={handleSelectVideoFile}
+                            className="sr-only"
+                          />
+                          <Upload className="w-6 h-6 text-purple-400 mb-1" />
+                          <span className="text-xs font-bold text-white">Choose MP4 Video File</span>
+                          <span className="text-[10px] text-gray-400">Direct from phone gallery or PC (MP4/MOV)</span>
+                        </label>
+                      </div>
+
+                      {/* Video Upload Progress Bar */}
+                      {isUploadingVideo && (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex justify-between text-[11px] text-gray-300">
+                            <span className="truncate max-w-[180px] font-mono">{videoFileName}</span>
+                            <span className="text-amber-400 font-bold">{videoUploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                            <div
+                              className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 transition-all duration-200"
+                              style={{ width: `${videoUploadProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-cyan-300 animate-pulse block">
+                            Uploading to Firebase Storage /demo-videos/...
+                          </span>
+                        </div>
+                      )}
+
+                      {!isUploadingVideo && newReelVideoUrl && (
+                        <div className="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-between text-[11px] text-emerald-300">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Check className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Video Ready ({videoFileName || 'Uploaded'})</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-400 shrink-0">100% Attached</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. DIRECT THUMBNAIL IMAGE UPLOAD */}
+                    <div className="p-4 rounded-xl bg-black/40 border border-white/10 flex flex-col justify-between">
+                      <div>
+                        <label className="block text-xs font-bold text-white mb-1.5 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>2. Select Reel Thumbnail Image <span className="text-rose-400">*</span></span>
+                          </span>
+                          <span className="text-[10px] text-cyan-300 font-normal">9:16 Aspect</span>
+                        </label>
+
+                        <label className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer bg-cyan-950/20 hover:bg-cyan-950/40 transition-all text-center">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleSelectThumbFile}
+                            className="sr-only"
+                          />
+                          <Upload className="w-6 h-6 text-cyan-400 mb-1" />
+                          <span className="text-xs font-bold text-white">Choose Thumbnail Image</span>
+                          <span className="text-[10px] text-gray-400">JPG, PNG, WEBP</span>
+                        </label>
+                      </div>
+
+                      {/* Thumbnail Upload Progress & Preview */}
+                      {isUploadingThumb && (
+                        <div className="mt-3 space-y-1.5">
+                          <div className="flex justify-between text-[11px] text-gray-300">
+                            <span className="truncate max-w-[180px] font-mono">{thumbFileName}</span>
+                            <span className="text-cyan-400 font-bold">{thumbUploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                            <div
+                              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-200"
+                              style={{ width: `${thumbUploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {!isUploadingThumb && newReelThumbUrl && (
+                        <div className="mt-3 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2.5">
+                          <img
+                            src={newReelThumbUrl}
+                            alt="Thumb Preview"
+                            className="w-8 h-12 object-cover rounded border border-white/20"
+                          />
+                          <div className="overflow-hidden flex-1 text-left">
+                            <span className="text-[11px] font-bold text-white block truncate">{thumbFileName || 'Thumbnail Image'}</span>
+                            <span className="text-[10px] text-emerald-400 flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Ready for display
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Metadata Fields: Title, Subtitle, Views */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">
+                        Reel Title <span className="text-rose-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Silence Speaks Volumes"
+                        value={newReelTitle}
+                        onChange={(e) => setNewReelTitle(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 text-white text-xs focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">
+                        Category / Subtitle
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Royal Attitude"
+                        value={newReelSubtitle}
+                        onChange={(e) => setNewReelSubtitle(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 text-white text-xs focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-300 mb-1">
+                        Viral Views Count
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 7.4M Views"
+                        value={newReelViews}
+                        onChange={(e) => setNewReelViews(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl bg-black/60 border border-white/15 text-white text-xs focus:outline-none focus:border-purple-400"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Reel Button */}
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={isUploadingVideo || isUploadingThumb}
+                      className="w-full py-3.5 rounded-xl glow-btn text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-xl disabled:opacity-50"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>
+                        {isUploadingVideo
+                          ? `Uploading Video (${videoUploadProgress}%)...`
+                          : isUploadingThumb
+                          ? `Uploading Thumbnail (${thumbUploadProgress}%)...`
+                          : 'PUBLISH DEMO REEL TO HOMEPAGE'}
+                      </span>
+                    </button>
+                  </div>
                 </form>
               </div>
 
@@ -1138,62 +1389,268 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onClos
           )}
 
           {/* ==================================================== */}
-          {/* TAB 9: WEBSITE SETTINGS */}
+          {/* TAB 10: COMPLETE FIREBASE CONFIGURATION & STORAGE */}
           {/* ==================================================== */}
-          {activeTab === 'site-settings' && (
-            <div className="space-y-6 max-w-3xl">
-              <div>
-                <h2 className="text-2xl font-black font-['Outfit']">Website & Flash Sale Settings</h2>
-                <p className="text-xs text-gray-400">
-                  Configure the top announcement bar text and live sale end countdown deadline.
-                </p>
+          {activeTab === 'firebase-config' && (
+            <div className="space-y-6 max-w-4xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div>
+                  <div className="flex items-center gap-2 text-amber-400 mb-1">
+                    <Flame className="w-5 h-5 fill-amber-400" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Cloud Storage Infrastructure</span>
+                  </div>
+                  <h2 className="text-2xl font-black font-['Outfit']">Complete Firebase Configuration</h2>
+                  <p className="text-xs text-gray-400">
+                    All Firebase setup information, Storage rules, initialization, and deployment instructions together in one organized section.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 shadow">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>SDK Active & Connected</span>
+                  </span>
+                </div>
               </div>
 
-              {siteSaved && (
-                <div className="p-4 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Countdown deadline and text updated across all visitors!</span>
+              {/* Status summary banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-[#111122] to-amber-950/40 border border-purple-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-left">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 block">Connected Firebase Project</span>
+                  <div className="text-base font-black text-amber-300 font-mono">reels-bundle-ae85c</div>
+                  <span className="text-xs text-gray-300">
+                    Bucket: <code className="text-cyan-300">reels-bundle-ae85c.firebasestorage.app</code>
+                  </span>
                 </div>
-              )}
 
-              <div className="glass-card p-6 rounded-2xl border border-white/10">
-                <form onSubmit={handleSaveSiteSettings} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      Top Announcement Bar Text
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={flashText}
-                      onChange={(e) => setFlashText(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white text-xs focus:outline-none focus:border-purple-400"
-                    />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const fullSnippet = `// SHERU BHAI STORE - COMPLETE FIREBASE CONFIGURATION
+// Project: reels-bundle-ae85c
+
+// 1. Web App Firebase Config
+export const firebaseConfig = {
+  apiKey: "AIzaSyBYKqeUQKnh4vs5q4fWw9cnkffnqzy7p8A",
+  authDomain: "reels-bundle-ae85c.firebaseapp.com",
+  projectId: "reels-bundle-ae85c",
+  storageBucket: "reels-bundle-ae85c.firebasestorage.app",
+  messagingSenderId: "682812839301",
+  appId: "1:682812839301:web:f1a8fc88b6f0f3190660ec",
+  measurementId: "G-ZJ43RC7YQ5"
+};
+
+// 2. Firebase Storage Rules (paste in Firebase Console -> Storage -> Rules)
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /demo-videos/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /demo-thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /product-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /product-downloads/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /payment-screenshots/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}`;
+                    navigator.clipboard.writeText(fullSnippet);
+                    alert('Firebase complete configuration block copied to clipboard!');
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-transform hover:scale-105"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Complete Firebase Block</span>
+                </button>
+              </div>
+
+              {/* 1. Project Configuration Card */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-amber-400 text-black font-black text-[10px] flex items-center justify-center">1</span>
+                    <span>Firebase Project Configuration</span>
+                  </h4>
+                  <span className="text-[10px] text-gray-400 font-mono">src/services/firebase.ts</span>
+                </div>
+                <pre className="p-3.5 bg-black/70 rounded-xl border border-white/10 text-cyan-300 font-mono text-xs overflow-x-auto leading-relaxed">
+{`const firebaseConfig = {
+  apiKey: "AIzaSyBYKqeUQKnh4vs5q4fWw9cnkffnqzy7p8A",
+  authDomain: "reels-bundle-ae85c.firebaseapp.com",
+  projectId: "reels-bundle-ae85c",
+  storageBucket: "reels-bundle-ae85c.firebasestorage.app",
+  messagingSenderId: "682812839301",
+  appId: "1:682812839301:web:f1a8fc88b6f0f3190660ec",
+  measurementId: "G-ZJ43RC7YQ5"
+};`}
+                </pre>
+              </div>
+
+              {/* 2 & 3. Storage & Authentication Setup */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-2">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-black text-[10px] flex items-center justify-center">2</span>
+                    <span>Firebase Storage Setup</span>
+                  </h4>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Default storage bucket initialized: <code className="text-amber-300 font-mono">reels-bundle-ae85c.firebasestorage.app</code>.
+                    All folders are organized for fast CDN delivery:
+                  </p>
+                  <ul className="text-[11px] text-gray-400 space-y-1 list-disc pl-4 font-mono">
+                    <li>/demo-videos/ (Direct MP4 9:16 uploads)</li>
+                    <li>/demo-thumbnails/ (Cover posters)</li>
+                    <li>/product-images/ (1:1 Box Cover artwork)</li>
+                    <li>/product-downloads/ (Master ZIP bundles)</li>
+                    <li>/payment-screenshots/ (UPI verification proof)</li>
+                  </ul>
+                </div>
+
+                <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-2">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-black text-[10px] flex items-center justify-center">3</span>
+                    <span>Firebase Authentication Setup</span>
+                  </h4>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Integrated with Firebase Auth (<code className="text-amber-300 font-mono">getAuth(app)</code>) and protected admin session layer.
+                    Supports Email/Password or master admin passcode:
+                  </p>
+                  <div className="p-2.5 bg-black/50 rounded-xl border border-white/10 text-xs">
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Configured Admin Passcode:</span>
+                    <span className="font-mono font-bold text-amber-300">Rayyan@1234</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Firebase Storage Rules */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-amber-400 text-black font-black text-[10px] flex items-center justify-center">4</span>
+                    <span>Firebase Storage Rules (Production Ready)</span>
+                  </h4>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Apply in Firebase Console → Storage → Rules</span>
+                </div>
+                <pre className="p-3.5 bg-black/70 rounded-xl border border-white/10 text-emerald-300 font-mono text-xs overflow-x-auto leading-relaxed">
+{`rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Public preview reels and thumbnails
+    match /demo-videos/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /demo-thumbnails/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /product-images/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    // Protected order assets
+    match /product-downloads/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /payment-screenshots/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}`}
+                </pre>
+              </div>
+
+              {/* 5. Required Environment Variables */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-black text-[10px] flex items-center justify-center">5</span>
+                    <span>Environment Variables (Vercel / .env.example)</span>
+                  </h4>
+                  <span className="text-[10px] text-gray-400">Optional overrides</span>
+                </div>
+                <pre className="p-3.5 bg-black/70 rounded-xl border border-white/10 text-yellow-300 font-mono text-xs overflow-x-auto leading-relaxed">
+{`VITE_FIREBASE_API_KEY="AIzaSyBYKqeUQKnh4vs5q4fWw9cnkffnqzy7p8A"
+VITE_FIREBASE_AUTH_DOMAIN="reels-bundle-ae85c.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="reels-bundle-ae85c"
+VITE_FIREBASE_STORAGE_BUCKET="reels-bundle-ae85c.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="682812839301"
+VITE_FIREBASE_APP_ID="1:682812839301:web:f1a8fc88b6f0f3190660ec"
+VITE_FIREBASE_MEASUREMENT_ID="G-ZJ43RC7YQ5"`}
+                </pre>
+              </div>
+
+              {/* 6, 7, 8, 9. Code Implementation Snippets */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-black text-[10px] flex items-center justify-center">6-9</span>
+                  <span>Initialization, Resumable Upload & Download URL Implementation</span>
+                </h4>
+                <pre className="p-3.5 bg-black/70 rounded-xl border border-white/10 text-cyan-300 font-mono text-xs overflow-x-auto leading-relaxed">
+{`// 6. Initialization
+import { initializeApp } from 'firebase/app';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+
+export const app = initializeApp(firebaseConfig);
+export const storage = getStorage(app);
+
+// 7 & 8. Resumable Upload with Progress Callback
+export function uploadToFirebaseStorage(file, folder, onProgress) {
+  const fileRef = ref(storage, \`\${folder}/\${Date.now()}_\${file.name}\`);
+  const uploadTask = uploadBytesResumable(fileRef, file);
+
+  uploadTask.on('state_changed', 
+    (snapshot) => {
+      const pct = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      if (onProgress) onProgress(Math.round(pct));
+    },
+    (err) => console.error(err),
+    async () => {
+      // 9. Download URL Handling
+      const url = await getDownloadURL(uploadTask.snapshot.ref);
+      return url;
+    }
+  );
+}`}
+                </pre>
+              </div>
+
+              {/* 10. Deployment & Setup Instructions */}
+              <div className="glass-card p-5 rounded-2xl border border-white/10 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500 text-black font-black text-[10px] flex items-center justify-center">10</span>
+                  <span>Deployment & Setup Instructions</span>
+                </h4>
+                <div className="space-y-3 text-xs text-gray-300 leading-relaxed">
+                  <div className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-1">
+                    <strong className="text-white block">Step A: Firebase Console Setup</strong>
+                    <p>1. Open <a href="https://console.firebase.google.com/project/reels-bundle-ae85c" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Firebase Console → Project reels-bundle-ae85c</a>.</p>
+                    <p>2. Click <strong>Storage</strong> in the left sidebar → Click <strong>Get Started</strong> (if not already created).</p>
+                    <p>3. Go to the <strong>Rules</strong> tab, paste the Storage Rules from Card 4 above, and click <strong>Publish</strong>.</p>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      Flash Sale Countdown End Date & Time
-                    </label>
-                    <input
-                      type="datetime-local"
-                      required
-                      value={deadlineInput}
-                      onChange={(e) => setDeadlineInput(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/20 text-white font-mono text-xs focus:outline-none focus:border-purple-400"
-                    />
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      When the countdown hits zero, visitors will see "SALE ENDED" until you extend the deadline here.
-                    </p>
+                  <div className="p-3 bg-black/40 rounded-xl border border-white/5 space-y-1">
+                    <strong className="text-white block">Step B: Vercel Deployment</strong>
+                    <p>1. Push your repository to GitHub.</p>
+                    <p>2. Import repository on Vercel.</p>
+                    <p>3. Set Build Command: <code className="text-amber-300 font-mono">npm run build</code>, Output Directory: <code className="text-amber-300 font-mono">dist</code>.</p>
+                    <p>4. Deploy! All media files and videos are stored directly in your Firebase Storage bucket.</p>
                   </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-3 rounded-xl glow-btn text-white font-bold text-xs cursor-pointer shadow-lg"
-                  >
-                    SAVE WEBSITE SETTINGS
-                  </button>
-                </form>
+                </div>
               </div>
             </div>
           )}

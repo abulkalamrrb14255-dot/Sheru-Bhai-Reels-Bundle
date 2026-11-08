@@ -32,7 +32,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       onLoginSuccess();
       onClose();
     } else {
-      setError('Invalid admin password. Default credentials: sherubhai@admin2027');
+      setError('Invalid admin password. Default credentials: Rayyan@1234');
     }
   };
 
@@ -86,7 +86,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-gray-400 mt-1.5">
-              Default password: <code className="text-amber-300 font-mono">sherubhai@admin2027</code>
+              Default passcode: <code className="text-amber-300 font-mono">Rayyan@1234</code>
             </p>
           </div>
 

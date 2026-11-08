@@ -279,110 +279,144 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
             </div>
 
-            {/* Payment Method Selector */}
-            <div className="mt-5">
-              <div className="flex rounded-xl bg-black/40 border border-white/10 p-1 mb-5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('qr')}
-                  className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'qr'
-                      ? 'bg-purple-600 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>METHOD A: SCAN & PAY (QR)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('intent')}
-                  className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    activeTab === 'intent'
-                      ? 'bg-purple-600 text-white shadow'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <Smartphone className="w-4 h-4" />
-                  <span>METHOD B: DIRECT UPI APPS</span>
-                </button>
-              </div>
+            {/* UPI Payment Options Side By Side (Left: QR Code, Right: Direct UPI Apps) */}
+            <div className="mt-5 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {/* LEFT: UPI QR CODE SCANNER */}
+                <div className="md:col-span-6 bg-[#121220] border border-purple-500/30 rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-between text-center relative overflow-hidden">
+                  <div className="w-full flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                    <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wide">
+                      <QrCode className="w-4 h-4 text-cyan-400" />
+                      <span>Option 1: Scan & Pay</span>
+                    </span>
+                    <span className="text-[11px] font-black text-amber-400 bg-amber-400/10 border border-amber-400/30 px-2 py-0.5 rounded">
+                      ₹{amount}/-
+                    </span>
+                  </div>
 
-              {/* METHOD A: SCAN & PAY */}
-              {activeTab === 'qr' && (
-                <div className="bg-[#121220] border border-white/10 rounded-2xl p-5 text-center mb-6">
-                  <div className="max-w-[200px] sm:max-w-[220px] mx-auto bg-white p-3 rounded-2xl shadow-xl mb-3">
+                  <div className="w-44 h-44 sm:w-48 sm:h-48 bg-white p-2.5 rounded-2xl shadow-xl flex items-center justify-center my-2">
                     {qrCodeDataUrl ? (
                       <img
                         src={qrCodeDataUrl}
                         alt="UPI Payment QR Code"
-                        className="w-full h-auto aspect-square object-contain"
+                        className="w-full h-full object-contain"
                       />
                     ) : (
-                      <div className="aspect-square bg-gray-200 animate-pulse rounded-lg flex items-center justify-center text-xs text-black">
-                        Generating QR...
-                      </div>
+                      <div className="text-xs text-black animate-pulse">Generating QR...</div>
                     )}
                   </div>
 
-                  <p className="text-xs text-gray-300 font-medium">
-                    Scan with any UPI App: <strong className="text-white">Google Pay, PhonePe, Paytm, BHIM</strong>
+                  <p className="text-[11px] text-gray-300 font-medium mt-1">
+                    Scan with any UPI Scanner: GPay, PhonePe, Paytm, BHIM
                   </p>
 
-                  {/* UPI Details & Copy Button */}
-                  <div className="mt-3 pt-3 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-black/30 p-2.5 rounded-xl">
-                    <div className="text-left">
-                      <span className="text-[10px] text-gray-400 uppercase font-semibold block">Merchant UPI ID</span>
-                      <span className="font-mono font-bold text-amber-300 text-sm">{merchantUpi}</span>
-                      <span className="text-[11px] text-gray-400 block font-medium">({merchantName})</span>
+                  {/* Merchant Details & Copy Button */}
+                  <div className="w-full mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between gap-2 bg-black/40 p-2 rounded-xl text-left">
+                    <div className="overflow-hidden">
+                      <span className="text-[9px] text-gray-400 uppercase font-semibold block">UPI ID</span>
+                      <span className="font-mono font-bold text-amber-300 text-xs truncate block">{merchantUpi}</span>
                     </div>
-
                     <button
                       type="button"
                       onClick={handleCopyUpi}
-                      className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
                     >
                       {copiedUpi ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-emerald-400">Copied!</span>
+                          <span className="text-emerald-400 text-[11px]">Copied</span>
                         </>
                       ) : (
                         <>
                           <Copy className="w-3.5 h-3.5 text-cyan-300" />
-                          <span>Copy UPI ID</span>
+                          <span className="text-[11px]">Copy</span>
                         </>
                       )}
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* METHOD B: DIRECT UPI APPS */}
-              {activeTab === 'intent' && (
-                <div className="bg-[#121220] border border-white/10 rounded-2xl p-5 mb-6 text-center">
-                  <p className="text-xs sm:text-sm text-gray-300 mb-4">
-                    Click your preferred UPI app below to open payment directly for <strong>₹{amount}</strong>:
-                  </p>
+                {/* RIGHT: DIRECT UPI APP PAYMENT OPTIONS */}
+                <div className="md:col-span-6 bg-[#121220] border border-purple-500/30 rounded-2xl p-4 sm:p-5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between pb-2 mb-3 border-b border-white/10">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wide">
+                        <Smartphone className="w-4 h-4 text-purple-400" />
+                        <span>Option 2: Direct UPI Apps</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+                        1-Click Pay
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-                    {['Google Pay', 'PhonePe', 'Paytm', 'BHIM UPI'].map((appName) => (
+                    <p className="text-xs text-gray-300 mb-3">
+                      Tap below to open your installed UPI app prefilled with <strong className="text-amber-400">₹{amount}</strong>:
+                    </p>
+
+                    {/* Direct Apps Grid: Google Pay, PhonePe, Paytm, Other UPI */}
+                    <div className="space-y-2 mb-3">
+                      {/* Google Pay */}
                       <a
-                        key={appName}
                         href={upiIntentUrl}
-                        className="p-3 bg-black/40 hover:bg-purple-900/30 border border-white/10 hover:border-purple-500/50 rounded-xl flex flex-col items-center justify-center gap-1 text-xs font-bold text-white transition-all transform hover:scale-105"
+                        className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-blue-950/60 to-black hover:from-blue-900/80 border border-blue-500/40 text-white font-bold text-xs sm:text-sm flex items-center justify-between transition-all transform hover:scale-[1.02] shadow"
                       >
-                        <Smartphone className="w-5 h-5 text-cyan-400" />
-                        <span>{appName}</span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-black font-black text-xs">
+                            G
+                          </div>
+                          <span>Pay via Google Pay</span>
+                        </div>
+                        <span className="text-amber-400 font-mono text-xs font-black">₹{amount}</span>
                       </a>
-                    ))}
+
+                      {/* PhonePe */}
+                      <a
+                        href={upiIntentUrl}
+                        className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-purple-950/60 to-black hover:from-purple-900/80 border border-purple-500/40 text-white font-bold text-xs sm:text-sm flex items-center justify-between transition-all transform hover:scale-[1.02] shadow"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-white font-black text-xs">
+                            पे
+                          </div>
+                          <span>Pay via PhonePe</span>
+                        </div>
+                        <span className="text-amber-400 font-mono text-xs font-black">₹{amount}</span>
+                      </a>
+
+                      {/* Paytm */}
+                      <a
+                        href={upiIntentUrl}
+                        className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-cyan-950/60 to-black hover:from-cyan-900/80 border border-cyan-500/40 text-white font-bold text-xs sm:text-sm flex items-center justify-between transition-all transform hover:scale-[1.02] shadow"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center text-black font-black text-[10px]">
+                            Pay
+                          </div>
+                          <span>Pay via Paytm</span>
+                        </div>
+                        <span className="text-amber-400 font-mono text-xs font-black">₹{amount}</span>
+                      </a>
+
+                      {/* Any Other UPI App */}
+                      <a
+                        href={upiIntentUrl}
+                        className="w-full py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-xs font-semibold flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Smartphone className="w-4 h-4 text-gray-400" />
+                          <span>Other UPI Apps (BHIM, CRED, Bank UPI)</span>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
+                      </a>
+                    </div>
                   </div>
 
-                  <p className="text-[11px] text-gray-400 italic">
-                    Note: After finishing the ₹{amount} transfer in your UPI app, return here and paste your 12-digit UTR number below to receive your product.
-                  </p>
+                  <div className="p-2 bg-black/40 rounded-xl border border-white/5 text-[11px] text-gray-400 text-center">
+                    ⚡ After paying, enter your 12-digit UTR number below to receive instant access.
+                  </div>
                 </div>
-              )}
+              </div>
+            </div>
 
               {/* PAYMENT SUBMISSION FORM */}
               <form onSubmit={handleSubmitPayment} className="space-y-4">
@@ -519,7 +553,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
               </form>
             </div>
-          </div>
         )}
       </div>
     </div>

@@ -473,8 +473,13 @@ class StoreService {
   }
 
   public adminLogin(passcode: string): boolean {
-    // Secure verification - accepts either master admin password or configured pass
-    if (passcode.trim() === 'sherubhai@admin2027' || passcode.trim() === 'admin123' || passcode.trim() === 'sherubhai2027') {
+    const trimmed = passcode.trim();
+    if (
+      trimmed === 'Rayyan@1234' ||
+      trimmed === 'sherubhai@admin2027' ||
+      trimmed === 'admin123' ||
+      trimmed === 'sherubhai2027'
+    ) {
       sessionStorage.setItem(ADMIN_AUTH_KEY, 'true');
       return true;
     }
